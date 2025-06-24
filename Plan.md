@@ -1,7 +1,13 @@
-1. Préparer l’environnement (Terraform, Ansible, AWS)
-2. Déployer l’infra avec Terraform (1 EC2 avec security group)
-3. Configurer le serveur avec Ansible (utilisateur, dossiers, droits, module Onlyoffice)
-4. Ajouter un load balancer et un second serveur NextCloud pour la redondance (optionnelle)
-5. Ajouter un certificat SSL Let's encrypt
-6. Tester l’accès mobile
-7. Documenter le projet
+## 🧭 Plan du projet
+
+| Étape | Description |
+|-------|-------------|
+| 1️⃣ | Préparer l’environnement (Terraform, Ansible, AWS CLI) |
+| 2️⃣ | Déployer l’infrastructure avec Terraform |
+| 3️⃣ | Configurer le serveur avec Ansible |
+| 4️⃣ | (Optionnel) Ajouter un second serveur + Load Balancer |
+| 5️⃣ | Ajouter un certificat SSL Let's Encrypt |
+| 6️⃣ | Tester la connexion mobile |
+| 7️⃣ | Documenter l’architecture et le déploiement |
+
+---
