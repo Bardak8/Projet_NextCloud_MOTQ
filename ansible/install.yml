@@ -1,0 +1,267 @@
+---
+- name: Déployer OwnCloud complet sur Debian avec ONLYOFFICE
+  hosts: all
+  become: true
+
+  vars:
+    owncloud_db_name: "owncloud"
+    owncloud_db_user: "ownclouduser"
+    owncloud_db_password: "passwordfortdb"
+    owncloud_admin_user: "admin"
+    owncloud_admin_pass: "StrongAdminPass!"
+    owncloud_data_dir: "/var/www/html/data"
+    owncloud_url: "https://download.owncloud.com/server/stable/owncloud-complete-latest.tar.bz2"
+    owncloud_archive: "/var/www/html/owncloud-complete-latest.tar.bz2"
+    owncloud_web_root: "/var/www/html"
+    owncloud_install_dir: "/var/www/html"
+    owncloud_tmp_dir: "/var/www/html/owncloud"
+    owncloud_db_host: "localhost"
+
+  tasks:
+    - name: Mettre à jour les paquets
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Installer utilitaires de base
+      apt:
+        name: [wget, unzip, nano, bzip2, tar]
+        state: present
+
+    - name: Installer Apache et MariaDB
+      apt:
+        name: [apache2, mariadb-server]
+        state: present
+
+    - name: Supprimer PHP 8.2 si présent
+      apt:
+        name: "{{ item }}"
+        state: absent
+        purge: yes
+      loop:
+        - php
+        - php8.2
+        - php8.2-common
+        - php8.2-cli
+        - php8.2-curl
+        - php8.2-gd
+        - php8.2-mysql
+        - php8.2-xml
+        - php8.2-mbstring
+        - php8.2-intl
+        - php8.2-zip
+
+    - name: Installer prérequis pour Sury
+      apt:
+        name:
+          - lsb-release
+          - ca-certificates
+          - apt-transport-https
+          - software-properties-common
+          - gnupg
+        state: present
+
+    - name: Ajouter clé GPG Sury
+      apt_key:
+        url: https://packages.sury.org/php/apt.gpg
+        state: present
+
+    - name: Ajouter dépôt PHP Sury
+      apt_repository:
+        repo: "deb https://packages.sury.org/php/ {{ ansible_distribution_release }} main"
+        state: present
+        filename: php
+
+    - name: Mettre à jour après dépôt Sury
+      apt:
+        update_cache: yes
+
+    - name: Installer PHP 7.4 et modules OwnCloud
+      apt:
+        name:
+          - php7.4
+          - php7.4-mysql
+          - php7.4-gd
+          - php7.4-xml
+          - php7.4-mbstring
+          - php7.4-intl
+          - php7.4-zip
+          - php7.4-curl
+          - php7.4-cli
+          - php7.4-bcmath
+          - php7.4-common
+        state: present
+
+    - name: Configurer Apache pour PHP 7.4
+      ansible.builtin.shell: |
+        a2dismod php*
+        a2enmod php7.4
+        systemctl restart apache2
+
+
+    - name: Activer Apache
+      systemd:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: Activer MariaDB
+      systemd:
+        name: mariadb
+        state: started
+        enabled: yes
+
+    - name: Installer pymysql
+      apt:
+        name: python3-pymysql
+        state: present
+
+    - name: Supprimer utilisateurs anonymes
+      community.mysql.mysql_user:
+        name: ''
+        host_all: true
+        state: absent
+        login_user: root
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Supprimer base test
+      community.mysql.mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Supprimer accès distant root
+      community.mysql.mysql_user:
+        name: root
+        host: "{{ item }}"
+        state: absent
+        login_user: root
+        login_unix_socket: /run/mysqld/mysqld.sock
+      loop: [ "%", "::1" ]
+
+    - name: Créer base owncloud
+      community.mysql.mysql_db:
+        name: "{{ owncloud_db_name }}"
+        state: present
+        login_user: root
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Créer utilisateur owncloud
+      community.mysql.mysql_user:
+        name: "{{ owncloud_db_user }}"
+        password: "{{ owncloud_db_password }}"
+        host: localhost
+        priv: "{{ owncloud_db_name }}.*:ALL"
+        state: present
+        login_user: root
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Vérifier si OwnCloud est déjà installé
+      stat:
+        path: /var/www/html/config/config.php
+      register: owncloud_installed
+
+    - name: Télécharger OwnCloud
+      get_url:
+        url: "{{ owncloud_url }}"
+        dest: "{{ owncloud_archive }}"
+        mode: '0644'
+      when: not owncloud_installed.stat.exists
+
+    - name: Extraire OwnCloud
+      unarchive:
+        src: "{{ owncloud_archive }}"
+        dest: "{{ owncloud_web_root }}"
+        remote_src: yes
+      when: not owncloud_installed.stat.exists
+
+    - name: Supprimer archive
+      file:
+        path: "{{ owncloud_archive }}"
+        state: absent
+      when: not owncloud_installed.stat.exists
+
+    - name: Déplacer OwnCloud à la racine
+      shell: |
+        mv {{ owncloud_tmp_dir }}/* {{ owncloud_web_root }}/
+        mv {{ owncloud_tmp_dir }}/.htaccess {{ owncloud_web_root }}/
+        mv {{ owncloud_tmp_dir }}/.user.ini {{ owncloud_web_root }}/
+        rmdir {{ owncloud_tmp_dir }}
+      when: not owncloud_installed.stat.exists
+
+    - name: Définir les permissions
+      file:
+        path: "{{ owncloud_web_root }}"
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    - name: Définir droits 755
+      file:
+        path: "{{ owncloud_web_root }}"
+        mode: '0755'
+        recurse: yes
+
+    - name: Initialiser OwnCloud
+      shell: |
+        sudo -u www-data php occ maintenance:install \
+          --database "mysql" \
+          --database-name "{{ owncloud_db_name }}" \
+          --database-user "{{ owncloud_db_user }}" \
+          --database-pass "{{ owncloud_db_password }}" \
+          --database-host "{{ owncloud_db_host }}" \
+          --admin-user "{{ owncloud_admin_user }}" \
+          --admin-pass "{{ owncloud_admin_pass }}" \
+          --data-dir "{{ owncloud_data_dir }}"
+      args:
+        chdir: /var/www/html
+      when: not owncloud_installed.stat.exists
+      register: owncloud_install
+
+    - name: Afficher résultat installation
+      debug:
+        var: owncloud_install.stdout
+      when: not owncloud_installed.stat.exists
+
+    - name: Ajouter l'IP publique à trusted_domains
+      lineinfile:
+        path: /var/www/html/config/config.php
+        regexp: "^\\s*0 => 'localhost',?"
+        insertafter: "^\\s*'trusted_domains' =>\\s*array \\($"
+        line: "    1 => '{{ ansible_host }}',"
+
+    - name: Télécharger le connecteur OnlyOffice
+      get_url:
+        url: "https://github.com/ONLYOFFICE/onlyoffice-owncloud/releases/download/v9.9.1/onlyoffice.tar.gz"
+        dest: /var/www/html/apps/onlyoffice.tar.gz
+        mode: '0644'
+
+    - name: Extraire l'archive onlyoffice.tar.gz
+      unarchive:
+        src: /var/www/html/apps/onlyoffice.tar.gz
+        dest: /var/www/html/apps/
+        remote_src: yes
+
+    - name: Supprimer l'archive onlyoffice.tar.gz
+      file:
+        path: /var/www/html/apps/onlyoffice.tar.gz
+        state: absent
+
+    - name: Donner les droits à apache sur le dossier onlyoffice
+      file:
+        path: /var/www/html/apps/onlyoffice
+        state: directory
+        recurse: yes
+        owner: www-data
+        group: www-data
+
+    - name: Activer le module onlyoffice dans OwnCloud avec sudo -u www-data
+      command: sudo -u www-data php occ app:enable onlyoffice
+      args:
+        chdir: /var/www/html
+
+    - name: Redémarrer le service Apache
+      service:
+        name: apache2
+        state: restarted
