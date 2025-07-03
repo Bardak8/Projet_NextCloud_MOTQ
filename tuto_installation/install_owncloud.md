@@ -109,7 +109,7 @@ http://<IP_PUBLIC_EC2>/owncloud
 
 ```bash
 cd /var/www/html/owncloud/apps
-sudo wget "https://marketplace-storage.owncloud.com/apps/onlyoffice-9.9.1.tar.gz?X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=HPRNVWVQLWXJRKK4TWHT%2F20250630%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250630T151601Z&X-Amz-SignedHeaders=host&X-Amz-Expires=1200&X-Amz-Signature=4ae5d748fc9055712fd6d9efa2d0afcdf8d7b8c5e3eb2bf2133e144147d9ec38" -O onlyoffice.tar.gz
+sudo wget "https://github.com/ONLYOFFICE/onlyoffice-owncloud/releases/download/v9.9.1/onlyoffice.tar.gz" -O onlyoffice.tar.gz
 sudo tar -xvzf onlyoffice.tar.gz
 sudo rm onlyoffice.tar.gz
 ```
