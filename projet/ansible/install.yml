@@ -1,6 +1,6 @@
 ---
 - name: Déployer OwnCloud complet sur Debian avec ONLYOFFICE
-  hosts: all
+  hosts: owncloud
   become: true
 
   vars:
@@ -265,3 +265,13 @@
       service:
         name: apache2
         state: restarted
+
+    - name: Supprimer la config 'secret' de OnlyOffice via occ
+      command: sudo -u www-data php occ config:app:delete onlyoffice secret
+      args:
+        chdir: /var/www/html
+
+    - name: Définir la valeur de 'DocumentServerUrl' dans l'app OnlyOffice
+      command: sudo -u www-data php occ config:app:set onlyoffice DocumentServerUrl --value="http://{{ onlyoffice_url }}"
+      args:
+        chdir: /var/www/html

@@ -1,0 +1,109 @@
+---
+- name: Installer Docker et OnlyOffice Document Server sur Debian 12
+  hosts: onlyoffice
+  become: yes
+
+  vars:
+    docker_gpg_url: https://download.docker.com/linux/debian/gpg
+    docker_key_path: /etc/apt/keyrings/docker.gpg
+    docker_repo_file: /etc/apt/sources.list.d/docker.list
+    onlyoffice_container_name: onlyoffice-document-server
+    onlyoffice_port: 80
+
+  tasks:
+
+    - name: Mettre à jour le système
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Installer les paquets nécessaires
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Créer le répertoire pour les clés APT si nécessaire
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Télécharger et convertir la clé GPG Docker
+      shell: |
+        curl -fsSL {{ docker_gpg_url }} | gpg --dearmor -o {{ docker_key_path }}
+      args:
+        creates: "{{ docker_key_path }}"
+
+    - name: Donner les bons droits à la clé GPG
+      file:
+        path: "{{ docker_key_path }}"
+        mode: '0644'
+
+    - name: Ajouter le dépôt Docker à la liste APT
+      copy:
+        dest: "{{ docker_repo_file }}"
+        content: |
+          deb [arch=amd64 signed-by={{ docker_key_path }}] https://download.docker.com/linux/debian {{ ansible_lsb.codename }} stable
+        mode: '0644'
+
+    - name: Mettre à jour le cache APT après ajout du dépôt Docker
+      apt:
+        update_cache: yes
+
+    - name: Installer Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Ajouter l'utilisateur courant au groupe docker
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Installer le SDK Docker Python pour Ansible
+      apt:
+        name: python3-docker
+        state: present
+
+    - name: Lancer le conteneur OnlyOffice Document Server
+      docker_container:
+        name: "{{ onlyoffice_container_name }}"
+        image: onlyoffice/documentserver
+        state: started
+        restart_policy: always
+        published_ports:
+          - "{{ onlyoffice_port }}:80"
+        env:
+          JWT_ENABLED: "false"
+
+    - name: Récupérer l'ID du conteneur OnlyOffice
+      command: docker ps -qf "name={{ onlyoffice_container_name }}"
+      register: container_id
+      changed_when: false
+
+    - name: Modifier autostart dans le fichier Supervisor à l'intérieur du conteneur
+      command: >
+        docker exec {{ container_id.stdout }} sed -i 's,autostart=false,autostart=true,' /etc/supervisor/conf.d/ds-example.conf
+
+    - name: Redémarrer le conteneur OnlyOffice pour appliquer les modifications Supervisor
+      docker_container:
+        name: "{{ onlyoffice_container_name }}"
+        state: started
+        restart: true
+
+    - name: Attendre que le service ds:example soit actif après redémarrage (info uniquement)
+      shell: docker exec {{ container_id.stdout }} supervisorctl status ds:example || true
+      register: supervisor_status
+      changed_when: false
+
+    - name: Afficher le statut de ds:example
+      debug:
+        var: supervisor_status.stdout_lines
