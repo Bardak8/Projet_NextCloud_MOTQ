@@ -44,7 +44,46 @@ Ce projet illustre un cas concret de déploiement automatisé d'une application 
 
 ---
 
+## Comment déployer le projet
+
+### Prérequis  
+Avoir **Ansible** et **Terraform** installés sur la machine.
+
+### Étapes de déploiement
+
+1. Extraire l'archive du projet dans un dossier de votre choix.
+
+2. Configurer AWS (ou tout autre provider cloud) avec la commande suivante :
+   ```bash
+   aws configure
+   ```
+   Cette commande vous demandera vos identifiants et la région.
+
+3. Modifier le fichier `provider.tf` pour y renseigner :
+   - la bonne région,
+   - le provider que vous utilisez (AWS, Azure, etc.).
+
+4. Installer les collections nécessaires avec les commandes suivantes :
+   ```bash
+   ansible-galaxy collection install community.mysql
+   ansible-galaxy collection install community.docker
+   ```
+
+5. Exécuter le script de déploiement :
+   ```bash
+   ./deploy.sh
+   ```
+
+⚠️ **Important :** Veillez à bien respecter l’architecture des dossiers telle qu’elle est définie dans le dépôt GitHub.
+
+
+---
+
+
 ## 📌 Réalisé par
 
 > 🧑‍🎓 Master 1 InfraCloud Aix
 > 👤 Trigramme : **Maxime Obry** et **Thomas Quadro**
+
+
+
